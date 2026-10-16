@@ -1,0 +1,6 @@
+{
+  "name": "Nexus Gaming Portal & CMS",
+  "description": "Moderni gaming news portal i CMS sistem sa admin panelom za objavljivanje vesti, kategorije, tagove, analitiku i AI pomoćnika.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
