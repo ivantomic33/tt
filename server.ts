@@ -1,9 +1,22 @@
 import './src/server/env';
-import type { IncomingMessage, ServerResponse } from 'http';
 import type { Express } from 'express';
 import { createApp } from './src/server/app';
 
-// Aplikacija se kreira jednom i kešira po instanci funkcije (Vercel warm start).
+/**
+ * Lokalni razvojni / tradicionalni Node server (npm run dev, npm start).
+ *
+ * VAŽNO: Ovaj fajl NE izvozi `default` handler namerno.
+ *
+ * Vercel na osnovu imena fajla (`server.ts`) zaključuje da je projekat
+ * „Express backend" i tada pokušava da kompajlira backend u `outputDirectory`
+ * (`dist/`). Pošto `dist/` sadrži Vite frontend build, deploy pada sa:
+ *   [BUILD_FAILED] No entrypoint found in output directory: "dist"
+ *
+ * Zato je serverless entrypoint izdvojen u `api/index.ts`, a statika se
+ * servira preko CDN-a iz `dist/`.
+ */
+
+// Aplikacija se kreira jednom i kešira (warm start).
 let appPromise: Promise<Express> | null = null;
 
 function getApp(): Promise<Express> {
@@ -13,24 +26,7 @@ function getApp(): Promise<Express> {
   return appPromise;
 }
 
-/**
- * Vercel Serverless Function handler.
- *
- * Vercel automatski detektuje `server.ts` kao Express backend i prosleđuje mu
- * sve HTTP zahteve (Express je i router i handler). Export `default` je
- * standardni `(req, res)` potpis koji Vercel Node runtime prihvata.
- */
-export default async function handler(
-  req: IncomingMessage,
-  res: ServerResponse
-): Promise<void> {
-  const app = await getApp();
-  (app as unknown as (req: IncomingMessage, res: ServerResponse) => void)(req, res);
-}
-
-// Lokalno / Render / Cloud Run: pokreni pravi HTTP server na portu.
-// Na Vercelu se `listen` NE poziva — funkcija se poziva po zahtevu (Vercel postavlja
-// i `VERCEL=1` i `VERCEL_ENV`, pa pokrivamo obe varijante).
+// Na Vercelu se `listen` NE poziva (funkcija se poziva po zahtevu).
 const IS_SERVERLESS = process.env.VERCEL === '1' || Boolean(process.env.VERCEL_ENV);
 
 if (!IS_SERVERLESS) {

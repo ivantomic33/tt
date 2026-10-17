@@ -1,5 +1,6 @@
 import './env';
 import path from 'path';
+import fs from 'fs';
 import express, { Express, Request, Response } from 'express';
 import cookieParser from 'cookie-parser';
 import authRouter from './auth/authRouter';
@@ -61,17 +62,21 @@ export async function createApp(): Promise<Express> {
   // 7. Frontend: Vite u razvoju / statički fajlovi u produkciji.
   //    U test režimu se oba preskaču (testiraju se samo API rute).
   //
-  //    NAPOMENA (Vercel): statika iz `public/**` se servira preko CDN-a, a SPA
-  //    deep-linkovi se rešavaju `rewrites` pravilom u vercel.json. Zato se ovaj
-  //    blok na Vercelu preskače (da ne troši serverless vreme i ne duplira
-  //    fallback), a ostaje aktivan za lokalni `npm start` / Render / Cloud Run.
+  //    NAPOMENA (Vercel): funkcija prima samo `/api/*` (vidi api/index.ts), dok
+  //    statiku i SPA deep-linkove servira Vercel CDN iz `dist/`. Zato se ovaj blok
+  //    na Vercelu preskače (da ne troši serverless vreme), a ostaje aktivan za
+  //    lokalni `npm start` / Render / Cloud Run.
   const isServerlessRuntime = process.env.VERCEL === '1' || Boolean(process.env.VERCEL_ENV);
 
   if (process.env.NODE_ENV === 'production' && !isServerlessRuntime) {
+    // Na Vercelu Vite gradi u `dist/`; lokalno u `public/`. Podrži oba.
     const publicDir = path.resolve(process.cwd(), 'public');
-    app.use(express.static(publicDir));
+    const distDir = path.resolve(process.cwd(), 'dist');
+    const staticDir = fs.existsSync(path.join(publicDir, 'index.html')) ? publicDir : distDir;
+
+    app.use(express.static(staticDir));
     app.get(/^\/(?!api(?:\/|$)).*/, (_req, res) => {
-      res.sendFile(path.join(publicDir, 'index.html'));
+      res.sendFile(path.join(staticDir, 'index.html'));
     });
   } else if (process.env.NODE_ENV !== 'production' && process.env.NODE_ENV !== 'test') {
     const { createServer: createViteServer } = await import('vite');
