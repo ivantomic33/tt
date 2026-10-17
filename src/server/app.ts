@@ -67,24 +67,27 @@ export async function createApp(): Promise<Express> {
   //    na Vercelu preskače (da ne troši serverless vreme), a ostaje aktivan za
   //    lokalni `npm start` / Render / Cloud Run.
   const isServerlessRuntime = process.env.VERCEL === '1' || Boolean(process.env.VERCEL_ENV);
+  const isTest = process.env.NODE_ENV === 'test';
 
-  if (process.env.NODE_ENV === 'production' && !isServerlessRuntime) {
-    // Na Vercelu Vite gradi u `dist/`; lokalno u `public/`. Podrži oba.
-    const publicDir = path.resolve(process.cwd(), 'public');
-    const distDir = path.resolve(process.cwd(), 'dist');
-    const staticDir = fs.existsSync(path.join(publicDir, 'index.html')) ? publicDir : distDir;
+  if (!isTest && !isServerlessRuntime) {
+    if (process.env.NODE_ENV === 'production') {
+      // Na Vercelu Vite gradi u `dist/`; lokalno u `public/`. Podrži oba.
+      const publicDir = path.resolve(process.cwd(), 'public');
+      const distDir = path.resolve(process.cwd(), 'dist');
+      const staticDir = fs.existsSync(path.join(publicDir, 'index.html')) ? publicDir : distDir;
 
-    app.use(express.static(staticDir));
-    app.get(/^\/(?!api(?:\/|$)).*/, (_req, res) => {
-      res.sendFile(path.join(staticDir, 'index.html'));
-    });
-  } else if (process.env.NODE_ENV !== 'production' && process.env.NODE_ENV !== 'test') {
-    const { createServer: createViteServer } = await import('vite');
-    const vite = await createViteServer({
-      server: { middlewareMode: true },
-      appType: 'spa',
-    });
-    app.use(vite.middlewares);
+      app.use(express.static(staticDir));
+      app.get(/^\/(?!api(?:\/|$)).*/, (_req, res) => {
+        res.sendFile(path.join(staticDir, 'index.html'));
+      });
+    } else if (process.env.NODE_ENV !== 'production' && process.env.NODE_ENV !== 'test') {
+      const { createServer: createViteServer } = await import('vite');
+      const vite = await createViteServer({
+        server: { middlewareMode: true },
+        appType: 'spa',
+      });
+      app.use(vite.middlewares);
+    }
   }
 
   // 8. Fallback globalni error handler
