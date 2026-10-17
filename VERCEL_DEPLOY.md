@@ -22,16 +22,20 @@ vrti kao **jednu Vercel funkciju** (Fluid compute). Zbog toga:
 
 ```json
 {
+  "framework": "express",
   "buildCommand": "npm run build",
   "installCommand": "npm install",
   "rewrites": [
-    { "source": "/((?!api/).*)", "destination": "/index.html" }
+    { "source": "/:path((?!api).*)", "destination": "/index.html" }
   ]
 }
 ```
 
+- `"framework": "express"` je **ključno**: bez toga Vercel sam izabere **Vite**
+  preset (jer vidi `vite.config.ts` + `index.html`) i traži `dist/`, pa build
+  padne sa `STATIC_BUILD_NO_OUT_DIR: No Output Directory named "dist"`.
 - Postojeći statički fajlovi (`/assets/...`) se serviraju prvo (filesystem ima prioritet).
-- Sve što nije `/api/*` i nije fajl → `/index.html` (SPA rutanje).
+- Sve što nije `/api*` i nije fajl → `/index.html` (SPA rutanje).
 - `/api/*` ide u Express funkciju.
 
 ## Korak 1 — Environment varijable na Vercelu
