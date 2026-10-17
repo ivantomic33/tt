@@ -4,6 +4,8 @@ node_modules/
 # Build output
 dist/
 build/
+# Frontend build za Vercel (Vite `build.outDir`) — generiše se u `npm run build`.
+public/
 
 # Logs
 *.log

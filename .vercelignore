@@ -1,0 +1,16 @@
+# Fajlovi/folderi koji se NE šalju u Vercel deployment.
+# (Vercel podržava samo gitignore-like sablone, bez `!` negacije.)
+
+# Zavisnosti i git istorija se ionako isključuju automatski, ali eksplicitno je jasnije.
+node_modules
+.git
+
+# Lokalne tajne — NIKAD ne idu u deployment bundle.
+.env
+.env.*
+
+# Ugnježdeni scaffold projekat (nije deo aplikacije).
+tt
+
+# Testovi i dokumentacija nisu potrebni u runtime bundle-u.
+tests

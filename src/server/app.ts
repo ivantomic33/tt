@@ -1,5 +1,6 @@
 import './env';
-import express, { Express } from 'express';
+import path from 'path';
+import express, { Express, Request, Response } from 'express';
 import cookieParser from 'cookie-parser';
 import authRouter from './auth/authRouter';
 import storageRouter from './storageRouter';
@@ -46,15 +47,29 @@ export async function createApp(): Promise<Express> {
   app.use('/api/cms', cmsRouter);
   app.use('/api/newsletter', newsletterRouter);
 
+  // 5b. Nepoznata /api ruta -> JSON 404 (umesto Express HTML "Cannot GET" stranice).
+  app.use('/api', (req: Request, res: Response) => {
+    res.status(404).json({
+      success: false,
+      error: `Ruta ${req.method} ${req.originalUrl} ne postoji.`,
+    });
+  });
+
   // 6. Centralizovani error handler za sve /api rute
   app.use('/api', errorHandlerMiddleware);
 
   // 7. Frontend: Vite u razvoju / statički fajlovi u produkciji.
   //    U test režimu se oba preskaču (testiraju se samo API rute).
+  //
+  //    NAPOMENA (Vercel): u jednom Express backend deploymentu Vercel ignoriše
+  //    `express.static` i statiku iz `public/**` servira preko CDN-a. Ovaj blok
+  //    i dalje služi kao SPA fallback kada zahtev stigne do funkcije (npr. deep
+  //    link `/forum`), kao i za lokalni `npm start`.
   if (process.env.NODE_ENV === 'production') {
-    app.use(express.static('dist'));
-    app.get('*', (_req, res) => {
-      res.sendFile('dist/index.html', { root: '.' });
+    const publicDir = path.resolve(process.cwd(), 'public');
+    app.use(express.static(publicDir));
+    app.get(/^\/(?!api(?:\/|$)).*/, (_req, res) => {
+      res.sendFile(path.join(publicDir, 'index.html'));
     });
   } else if (process.env.NODE_ENV !== 'test') {
     const { createServer: createViteServer } = await import('vite');

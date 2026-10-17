@@ -6,6 +6,14 @@ import {defineConfig} from 'vite';
 export default defineConfig(() => {
   return {
     plugins: [react(), tailwindcss()],
+    // Vercel (Express backend) ignoriše `express.static` i servira statiku iz
+    // `public/**` preko CDN-a. Zato frontend build ide direktno u `public/`.
+    // `publicDir` se isključuje da Vite ne bi rekurzivno kopirao sam sebe.
+    publicDir: false as const,
+    build: {
+      outDir: 'public',
+      emptyOutDir: true,
+    },
     resolve: {
       alias: {
         '@': path.resolve(import.meta.dirname, "./src"),
