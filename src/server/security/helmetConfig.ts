@@ -53,6 +53,10 @@ export const helmetSecurityMiddleware: RequestHandler = helmet({
       ],
       connectSrc: [
         "'self'",
+        // Eksplicitno dozvoljeni origin-i iz okruženja (produkcija/staging domen).
+        // Potrebno zbog SSE stream-ova i fetch poziva ka istom API-ju preko CDN-a.
+        ...(process.env.FRONTEND_URL ? [process.env.FRONTEND_URL] : []),
+        ...(process.env.APP_URL ? [process.env.APP_URL] : []),
         'http://localhost:3000',
         'http://127.0.0.1:3000',
         'https://*.supabase.co',

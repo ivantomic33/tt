@@ -10,33 +10,42 @@ vrti kao **jednu Vercel funkciju** (Fluid compute). Zbog toga:
 
 | Promena | Zašto |
 |---------|-------|
-| Vite build sada izlazi u `public/` (`vite.config.ts`) | Vercel **ignoriše `express.static()`**, a statiku servira preko CDN-a iz `public/**`. |
-| `server.ts` eksportuje `default` handler `(req, res)` pored lokalnog `app.listen` | Vercel funkcija poziva handler po zahtevu; lokalno/Render i dalje radi klasičan HTTP server. `listen` se preskače kada je `VERCEL=1`. |
-| `app.ts` u produkciji servira SPA fallback iz `public/index.html` (osim za `/api/*`) | Deep linkovi kao `/forum` rade i ako zahtev stigne do funkcije. |
+| Vite build izlazi u `dist/` na Vercelu, a u `public/` lokalno (`vite.config.ts`) | Na Vercelu je `server.ts` serverless funkcija; statika se servira preko CDN-a iz `outputDirectory`. Lokalno `server.ts` i dalje servira iz `public/`. |
+| `server.ts` eksportuje `default` handler `(req, res)` pored lokalnog `app.listen` | Vercel funkcija poziva handler po zahtevu; lokalno/Render i dalje radi klasičan HTTP server. `listen` se preskače kada je `VERCEL=1` ili `VERCEL_ENV` postavljen. |
+| `app.ts` ne servira statiku/SPA na Vercelu | CDN servira statiku, a Vercel automatski pada na `index.html` za nepoznate putanje. Ovako se ne troši serverless vreme. |
 | Dodat JSON `404` za nepoznate `/api/*` rute | API vraća JSON umesto Express HTML stranice. |
-| `vercel.json` | `buildCommand` + SPA fallback rewrite (vidi dole). |
+| `vercel.json` | `outputDirectory: "dist"`, deklaracija `server.ts` kao `@vercel/node` funkcije, `buildCommand`. |
+| SSE stream-ovi (`/api/forum/stream`, `/api/posts/:id/reactions/stream`) se degradiraju na jednokratni snapshot | Serverless funkcija ne može da drži dugotrajnu konekciju. |
 | `.vercelignore` | Ne šalje `.env`, ugnježdeni `tt/`, testove u deployment. |
-| `.gitignore` | Sada ignoriše i `public/` (build izlaz). |
 
 `vercel.json`:
 
 ```json
 {
   "framework": "express",
-  "buildCommand": "npm run build",
   "installCommand": "npm install",
-  "rewrites": [
-    { "source": "/:path((?!api).*)", "destination": "/index.html" }
-  ]
+  "buildCommand": "npm run build",
+  "outputDirectory": "dist",
+  "functions": {
+    "server.ts": {
+      "runtime": "@vercel/node@5.0.0",
+      "maxDuration": 30,
+      "memory": 1024,
+      "includeFiles": "src/**"
+    }
+  }
 }
 ```
 
-- `"framework": "express"` je **ključno**: bez toga Vercel sam izabere **Vite**
-  preset (jer vidi `vite.config.ts` + `index.html`) i traži `dist/`, pa build
-  padne sa `STATIC_BUILD_NO_OUT_DIR: No Output Directory named "dist"`.
-- Postojeći statički fajlovi (`/assets/...`) se serviraju prvo (filesystem ima prioritet).
-- Sve što nije `/api*` i nije fajl → `/index.html` (SPA rutanje).
-- `/api/*` ide u Express funkciju.
+- `outputDirectory: "dist"` mora da odgovara `outDir`-u iz `vite.config.ts`
+  (koji je `dist` kada je `VERCEL`/`VERCEL_ENV` postavljen). Neslaganje daje
+  `STATIC_BUILD_NO_OUT_DIR: No Output Directory named "dist"`.
+- `functions.server.ts` eksplicitno vezuje Express app za `@vercel/node` runtime.
+- **Root Directory mora biti prazan (root repoa).** Ako je postavljen na `tt`,
+  Vercel builduje ugnježdeni scaffold projekat, ignoriše ovaj `vercel.json` i
+  traži `dist/` koji ne postoji.
+- `/api/*` ide u Express funkciju; statika (`/assets/...`) se servira preko CDN-a;
+  ostalo dobija SPA `index.html` preko Vercel-ovog automatskog fallback-a.
 
 ## Korak 1 — Environment varijable na Vercelu
 
@@ -91,10 +100,11 @@ git push origin main
 ```
 
 Zatim na [vercel.com/new](https://vercel.com/new) importuj repo
-`ivantomic33/tt`. Vercel će:
-1. pokrenuti `npm install` (eksplicitno zadato, uprkos `bun.lock`),
-2. pokrenuti `npm run build` (frontend → `public/`),
-3. detektovati `server.ts` kao Express backend i napraviti jednu funkciju.
+`ivantomic33/tt`. U podešavanjima projekta **ostavi Root Directory prazan**
+(ne `tt`). Vercel će:
+1. pokrenuti `npm install` (eksplicitno zadato),
+2. pokrenuti `npm run build` (frontend → `dist/`, jer je `VERCEL` postavljen),
+3. preuzeti `server.ts` kao jednu `@vercel/node` funkciju.
 
 Prvi deploy postavlja **production** domen; kasniji push-evi prave preview.
 
@@ -103,6 +113,8 @@ Prvi deploy postavlja **production** domen; kasniji push-evi prave preview.
 - [ ] `GET /` vraća SPA (200, `text/html`).
 - [ ] `GET /forum` (deep link) vraća SPA (200).
 - [ ] `GET /assets/<hash>.js` vraća JS (200).
+- [ ] `GET /api/forum/stream` vraća `text/event-stream` i odmah zatvara konekciju
+      (na serverless-u nema dugotrajnog SSE-a).
 - [ ] `POST /api/auth/login` ne vraća CORS grešku.
 - [ ] `GET /api/nepoznato` vraća JSON `404`.
 - [ ] Server ne baca `Missing required secret` (sve tajne postavljene).
@@ -118,6 +130,8 @@ Aplikacija je dizajnirana kao jedan dugotrajni proces; na serverless modelu:
   koristi Supabase Storage.
 - **Reset tokeni** (single-use) drže se u memoriji → mogu se „resetovati“ između
   instanci.
+- **Real-time (SSE)** je na Vercelu degradiran na jednokratni snapshot; za pravi
+  real-time koristi Supabase Realtime ili isti kod na dugotrajnom Node hostu.
 
 Za punu funkcionalnost bez ovih ograničenja, isti kod radi na Render/Railway/
 Fly.io/Cloud Run kao klasičan Node server (`npm start`), bez izmena.

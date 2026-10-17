@@ -20,15 +20,44 @@ const localReactionsStore: LocalReactionEntry[] = [
   { postId: 5, reactionType: 'gg', clientId: 'seed_client_1' },
 ];
 
+/**
+ * Serverless okruženja (Vercel) prekidaju dugotrajne HTTP odgovore (SSE), zato
+ * se stream endpoint u takvom okruženju degradira na jednokratni odgovor.
+ */
+const IS_SERVERLESS = process.env.VERCEL === '1' || process.env.VERCEL === 'true';
+
 export class ReactionsController {
   /**
    * SSE Stream endpoint for live post reaction updates
    * GET /api/posts/:id/reactions/stream
    */
-  static streamReactions(req: Request, res: Response): void {
+  static async streamReactions(req: Request, res: Response): Promise<void> {
     const postId = Number(req.params.id);
     if (isNaN(postId) || postId <= 0) {
       res.status(400).json({ success: false, error: 'Neispravan ID posta.' });
+      return;
+    }
+
+    const clientId =
+      (typeof req.query.clientId === 'string' && req.query.clientId.slice(0, 120)) ||
+      (typeof req.headers['x-client-id'] === 'string' && req.headers['x-client-id'].slice(0, 120)) ||
+      'anon';
+
+    // Serverless (Vercel): bez dugotrajne SSE konekcije i bez intervala.
+    if (IS_SERVERLESS) {
+      const snapshot = await ReactionsController.calculatePostReactions(postId, clientId);
+      res.writeHead(200, {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache, no-transform',
+      });
+      res.end(
+        `data: ${JSON.stringify({
+          type: 'reaction_updated',
+          postId,
+          counts: snapshot.counts,
+          timestamp: new Date().toISOString(),
+        })}\n\n`
+      );
       return;
     }
 
@@ -56,6 +85,8 @@ export class ReactionsController {
         clearInterval(heartbeatInterval);
       }
     }, 15000);
+    // Ne drži Node proces budnim samo zbog heartbeat intervala.
+    heartbeatInterval.unref?.();
 
     req.on('close', () => {
       clearInterval(heartbeatInterval);
@@ -207,7 +238,7 @@ export class ReactionsController {
     }
   }
 
-  private static async calculatePostReactions(
+  static async calculatePostReactions(
     postId: number,
     clientId: string
   ): Promise<{

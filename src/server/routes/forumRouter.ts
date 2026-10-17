@@ -33,6 +33,9 @@ const strictWriteRateLimiter = commentRateLimiter;
 
 const router = Router();
 
+// Serverless (npr. Vercel) ne može da drži dugotrajne HTTP konekcije (SSE).
+const IS_SERVERLESS_RUNTIME = process.env.VERCEL === '1' || process.env.VERCEL === 'true';
+
 // Set of connected SSE clients listening for real-time forum activity (votes, new threads, replies, leaderboard)
 const sseForumClients = new Set<Response>();
 
@@ -275,6 +278,22 @@ function isOwnerOrModerator(req: AuthenticatedRequest, authorId?: string, author
  * Real-time Server-Sent Events stream for votes, threads, comments, and leaderboard updates
  */
 router.get('/stream', (_req: Request, res: Response) => {
+  const snapshot = {
+    type: 'leaderboard_updated',
+    timestamp: new Date().toISOString(),
+  };
+
+  // Serverless (Vercel): dugotrajna SSE konekcija nije izvodljiva, pa se klijentu
+  // vraća jednokratni snapshot i konekcija se zatvara.
+  if (IS_SERVERLESS_RUNTIME) {
+    res.writeHead(200, {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache, no-transform',
+    });
+    res.end(`data: ${JSON.stringify(snapshot)}\n\n`);
+    return;
+  }
+
   res.writeHead(200, {
     'Content-Type': 'text/event-stream',
     'Cache-Control': 'no-cache, no-transform',
@@ -290,6 +309,8 @@ router.get('/stream', (_req: Request, res: Response) => {
   const heartbeat = setInterval(() => {
     res.write(': ping\n\n');
   }, 15000);
+  // Ne drži Node proces budnim samo zbog heartbeat intervala.
+  heartbeat.unref?.();
 
   _req.on('close', () => {
     clearInterval(heartbeat);

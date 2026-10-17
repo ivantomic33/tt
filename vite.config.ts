@@ -4,14 +4,20 @@ import path from 'path';
 import {defineConfig} from 'vite';
 
 export default defineConfig(() => {
+  // Serverless deploy (Vercel): `server.ts` je serverless funkcija, a statički
+  // build se servira preko CDN-a iz posebnog foldera (`dist`) kako se output
+  // build-a i izvorni kod funkcije ne bi mešali u istom folderu (`public/`).
+  const isServerlessBuild = process.env.VERCEL === '1' || Boolean(process.env.VERCEL_ENV);
+  const outDir = isServerlessBuild ? 'dist' : 'public';
+
   return {
     plugins: [react(), tailwindcss()],
     // Vercel (Express backend) ignoriše `express.static` i servira statiku iz
-    // `public/**` preko CDN-a. Zato frontend build ide direktno u `public/`.
+    // `outputDirectory` preko CDN-a. Lokalno `server.ts` servira iz `public/`.
     // `publicDir` se isključuje da Vite ne bi rekurzivno kopirao sam sebe.
     publicDir: false as const,
     build: {
-      outDir: 'public',
+      outDir,
       emptyOutDir: true,
     },
     resolve: {

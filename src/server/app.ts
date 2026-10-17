@@ -61,17 +61,19 @@ export async function createApp(): Promise<Express> {
   // 7. Frontend: Vite u razvoju / statički fajlovi u produkciji.
   //    U test režimu se oba preskaču (testiraju se samo API rute).
   //
-  //    NAPOMENA (Vercel): u jednom Express backend deploymentu Vercel ignoriše
-  //    `express.static` i statiku iz `public/**` servira preko CDN-a. Ovaj blok
-  //    i dalje služi kao SPA fallback kada zahtev stigne do funkcije (npr. deep
-  //    link `/forum`), kao i za lokalni `npm start`.
-  if (process.env.NODE_ENV === 'production') {
+  //    NAPOMENA (Vercel): statika iz `public/**` se servira preko CDN-a, a SPA
+  //    deep-linkovi se rešavaju `rewrites` pravilom u vercel.json. Zato se ovaj
+  //    blok na Vercelu preskače (da ne troši serverless vreme i ne duplira
+  //    fallback), a ostaje aktivan za lokalni `npm start` / Render / Cloud Run.
+  const isServerlessRuntime = process.env.VERCEL === '1' || Boolean(process.env.VERCEL_ENV);
+
+  if (process.env.NODE_ENV === 'production' && !isServerlessRuntime) {
     const publicDir = path.resolve(process.cwd(), 'public');
     app.use(express.static(publicDir));
     app.get(/^\/(?!api(?:\/|$)).*/, (_req, res) => {
       res.sendFile(path.join(publicDir, 'index.html'));
     });
-  } else if (process.env.NODE_ENV !== 'test') {
+  } else if (process.env.NODE_ENV !== 'production' && process.env.NODE_ENV !== 'test') {
     const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({
       server: { middlewareMode: true },

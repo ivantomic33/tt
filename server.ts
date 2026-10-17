@@ -29,8 +29,11 @@ export default async function handler(
 }
 
 // Lokalno / Render / Cloud Run: pokreni pravi HTTP server na portu.
-// Na Vercelu (`VERCEL === '1'`) se `listen` NE poziva — funkcija se poziva po zahtevu.
-if (process.env.VERCEL !== '1') {
+// Na Vercelu se `listen` NE poziva — funkcija se poziva po zahtevu (Vercel postavlja
+// i `VERCEL=1` i `VERCEL_ENV`, pa pokrivamo obe varijante).
+const IS_SERVERLESS = process.env.VERCEL === '1' || Boolean(process.env.VERCEL_ENV);
+
+if (!IS_SERVERLESS) {
   getApp()
     .then((app) => {
       const PORT = Number(process.env.PORT) || 3000;
